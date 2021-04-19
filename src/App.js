@@ -1,7 +1,8 @@
 
-import { isEmpty, size } from 'lodash';
-import React,{useState} from 'react'
+import { isEmpty, result, size } from 'lodash';
+import React,{useState, useEffect} from 'react'
 import shortid from 'shortid';
+import {  addDocument, deleteDocument, getCollection, updateDocument } from './actions'
 
 function App() {
   const [task, setTask] = useState("")
@@ -9,6 +10,19 @@ function App() {
   const [editMode, setEditMode] = useState(false)
   const [id, setId] = useState("")
   const [error, setError] = useState(null)
+
+
+  useEffect(() => {
+    // metodo asincrono ()() autoejecutable
+    (async () => {
+      const result = await getCollection("tasks")
+     if (result.statusResponse) {
+        setTasks(result.data)
+      }
+      //console.log(result)
+    })()
+  }, [])
+
 
   const validForm = () =>{
     let isValid = true;
@@ -20,28 +34,32 @@ function App() {
      }
      return isValid;
   }
-  const addTask = (e) => {
-    //evitar que recargue la pagina por el submit
-    e.preventDefault();
-    //validar datos  si no es valido regresar 
-    if(!validForm()){
-     // console.log("Task empty");
+  
+  const addTask = async(e) => {
+    e.preventDefault()
+
+    if (!validForm()) {
       return
     }
 
-    const newTask = {
-      //         el metodo generate genera un codigo alfa numerico que no se repite 
-      id: shortid.generate(),
-      name: task
+    const result = await addDocument("tasks", { name: task })
+    if (!result.statusResponse) {
+      setError(result.error)
+      return
     }
-    //se agrega nueva tarea
-    setTasks([...tasks, newTask])
-    //console.log("Ok")
-    setTask("");
-    
+
+    setTasks([ ...tasks, { id: result.data.id, name: task } ])
+    setTask("")
   }
 
-  const deleteTask = (id) => {
+  
+  const deleteTask = async(id) => {
+    const result = await deleteDocument("tasks", id);
+    if(!result.statusResponse){
+      setError(result.error);
+      return
+    }
+    //borra de la memoria
     //                 filtrat todas las tareas donde las  tareas todos los id diferentes al id que eliminaste
     const filteredTasks = tasks.filter(task => task.id !== id )
     setTasks(filteredTasks)
@@ -53,14 +71,19 @@ function App() {
     setId(theTask.id)
   }
 
-  const saveTask = (e) => {
+  const saveTask = async(e) => {
     e.preventDefault()
     //validar datos  si no es valido regresar 
     if(!validForm()){
       // console.log("Task empty");
         return
-      }
+    }
 
+    const result =  await updateDocument( "tasks", id, { name:task } )
+    if(!result.statusResponse){
+      setError(result.error)
+      return
+    }
     //por cada tarea se va a iterar un item y preguntar si el item.id == id entonces remplazar ese objeto por el id y 
     //el nombre lo remplazas por el nombre que se capturo en caso contrario se devuelve el mismo objeto item
     const editedTask = tasks.map(item => item.id === id ? { id, name : task } : item)
@@ -81,7 +104,7 @@ function App() {
             Lista de Tareas
           </h4>
           {
-            size(tasks) == 0 ? (<li className="list-group-item"> Aun no hay tareas programadas</li>) : 
+            size(tasks) === 0 ? (<li className="list-group-item"> Aun no hay tareas programadas</li>) : 
             (
               <ul className="list-group">
                 {
